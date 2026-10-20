@@ -1,8 +1,8 @@
 {
-  "name": "lora-monitoring-leaflet-mysql",
+  "name": "lora-monitoring-supabase",
   "version": "1.0.0",
   "private": true,
-  "description": "Monitoring LoRa realtime dengan ESP32, Node.js, MySQL, Socket.IO, Leaflet, dan OpenFreeMap",
+  "description": "Monitoring LoRa realtime dengan ESP32, Node.js, Supabase, Leaflet, dan OpenFreeMap",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -15,10 +15,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
+    "@supabase/supabase-js": "^2.49.1",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "mysql2": "^3.22.6",
-    "socket.io": "^4.8.3"
+    "express": "^4.21.2"
   }
 }
