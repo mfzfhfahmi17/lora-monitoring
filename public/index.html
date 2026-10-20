@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Dashboard monitoring node LoRa realtime">
+  <title>LoRa Ground Monitor</title>
+
+  <link rel="preconnect" href="https://unpkg.com">
+  <link rel="preconnect" href="https://tiles.openfreemap.org">
+
+  <!-- 1. CSS Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  >
+
+  <!-- 2. CSS MapLibre GL (Wajib ada agar OpenFreeMap / MapLibre bisa render) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" />
+
+  <!-- 3. CSS Aplikasi -->
+  <link rel="stylesheet" href="./styles.css?v=1.1.0">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">L</div>
+        <div>
+          <p class="eyebrow">GROUND STATION</p>
+          <h1>LoRa Monitor</h1>
+        </div>
+      </div>
+
+      <div class="connection-card">
+        <span id="socketDot" class="status-dot status-dot--pending"></span>
+        <div>
+          <strong id="socketStatus">Menghubungkan...</strong>
+          <small id="serverClock">--:--:-- WIB</small>
+        </div>
+      </div>
+
+      <nav class="menu">
+        <button class="menu-item active" data-target="overview">Ringkasan</button>
+        <button class="menu-item" data-target="nodes">Daftar node</button>
+        <button class="menu-item" data-target="history">Riwayat terbaru</button>
+      </nav>
+
+      <div class="sidebar-note">
+        <strong>Peta tanpa API key</strong>
+        <span>Leaflet + OpenFreeMap. Internet tetap diperlukan untuk memuat basemap.</span>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">MONITORING REALTIME</p>
+          <h2>Pusat Kendali Sampah Darat</h2>
+          <p class="subtitle">Lokasi, deteksi objek, sudut servo, jarak, dan kekuatan sinyal LoRa.</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="refreshButton" class="button button--secondary">Muat ulang</button>
+          <a class="button button--primary" href="/api/export.csv">Ekspor CSV</a>
+        </div>
+      </header>
+
+      <section id="overview" class="stats-grid">
+        <article class="stat-card">
+          <span>Total node</span>
+          <strong id="totalNodes">0</strong>
+          <small>Perangkat terdaftar</small>
+        </article>
+        <article class="stat-card">
+          <span>Node online</span>
+          <strong id="onlineNodes">0</strong>
+          <small>Aktif dalam batas timeout</small>
+        </article>
+        <article class="stat-card stat-card--alert">
+          <span>Deteksi sampah</span>
+          <strong id="alertNodes">0</strong>
+          <small>Node berstatus ADA</small>
+        </article>
+        <article class="stat-card">
+          <span>Total telemetry</span>
+          <strong id="totalTelemetry">0</strong>
+          <small>Data tersimpan di Supabase</small>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel map-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">PETA POSISI</p>
+              <h3>Lokasi node</h3>
+            </div>
+            <div class="map-actions">
+              <span id="mapStatus" class="pill">Memuat peta...</span>
+              <button id="fitNodesButton" class="icon-button" title="Tampilkan semua node">Semua node</button>
+            </div>
+          </div>
+          <div id="map" aria-label="Peta monitoring node LoRa"></div>
+          <div class="legend">
+            <span><i class="legend-dot legend-dot--normal"></i>Normal</span>
+            <span><i class="legend-dot legend-dot--alert"></i>Sampah terdeteksi</span>
+            <span><i class="legend-dot legend-dot--offline"></i>Offline</span>
+          </div>
+        </article>
+
+        <article class="panel selected-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">NODE TERPILIH</p>
+              <h3 id="selectedNodeTitle">Belum dipilih</h3>
+            </div>
+            <span id="selectedNodeBadge" class="badge badge--offline">-</span>
+          </div>
+
+          <div id="emptySelection" class="empty-state">
+            Pilih marker atau baris node untuk melihat detail.
+          </div>
+
+          <div id="selectedNodeDetails" class="detail-list hidden">
+            <div><span>Status sampah</span><strong id="detailTrash">-</strong></div>
+            <div><span>Jarak objek</span><strong id="detailDistance">-</strong></div>
+            <div><span>Sudut servo</span><strong id="detailServo">-</strong></div>
+            <div><span>RSSI</span><strong id="detailRssi">-</strong></div>
+            <div><span>Koordinat</span><strong id="detailCoordinates">-</strong></div>
+            <div><span>Terakhir diterima</span><strong id="detailLastSeen">-</strong></div>
+          </div>
+
+          <button id="showRouteButton" class="button button--secondary button--full" disabled>
+            Tampilkan jalur riwayat
+          </button>
+        </article>
+      </section>
+
+      <section id="nodes" class="panel table-panel">
+        <div class="panel-header table-toolbar">
+          <div>
+            <p class="eyebrow">PERANGKAT</p>
+            <h3>Daftar node</h3>
+          </div>
+          <input id="nodeSearch" type="search" placeholder="Cari Node ID..." autocomplete="off">
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Node</th>
+                <th>Koneksi</th>
+                <th>Deteksi</th>
+                <th>Jarak</th>
+                <th>Sudut</th>
+                <th>RSSI</th>
+                <th>Terakhir aktif</th>
+              </tr>
+            </thead>
+            <tbody id="nodesTableBody">
+              <tr><td colspan="7" class="table-empty">Belum ada data node.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="history" class="panel table-panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">DATABASE</p>
+            <h3>Telemetry terbaru</h3>
+          </div>
+          <span class="pill">100 data terakhir</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Waktu diterima (WIB)</th>
+                <th>Waktu kapal</th>
+                <th>Node</th>
+                <th>Koordinat</th>
+                <th>Status</th>
+                <th>Jarak</th>
+                <th>Sudut</th>
+                <th>RSSI</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <tr><td colspan="8" class="table-empty">Belum ada telemetry.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- UBAH URUTAN SCRIPT DI SINI (Wajib Berurutan) -->
+  <!-- 1. Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- 2. MapLibre GL JS -->
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+  <!-- 3. Adapter Leaflet + MapLibre -->
+  <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.20/leaflet-maplibre-gl.js"></script>
+
+  <!-- 4. Supabase Client & App JS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./app.js?v=2.0.0"></script>
+</body>
+</html>
